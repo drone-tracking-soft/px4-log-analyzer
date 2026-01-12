@@ -730,7 +730,7 @@ def index():
                 <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                     <div class="upload-icon">📁</div>
                     <h3>Загрузите .ulg файл</h3>
-                    <p>Нажмите или перетащите файл</p>
+                   
                 </div>
                 
                 <input type="file" id="fileInput" name="file" accept=".ulg" class="file-input" onchange="this.form.submit()" required>
