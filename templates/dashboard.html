@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Шапка -->
+    <div class="dashboard-header">
+        <h2>📊 Анализ: {{ filename }}</h2>
+        <div class="file-meta">
+            <span>🕓 {{ metadata.duration }}</span>
+            <span>✈️ {{ metadata.vehicle_type }}</span>
+            <span>🔧 {{ metadata.firmware }}</span>
+        </div>
+    </div>
+    
+    <!-- Основные метрики -->
+    <div class="metrics-grid">
+        {% if metrics.gps %}
+        <div class="metric-card">
+            <h3>📍 GPS</h3>
+            <div class="metric-value">{{ metrics.gps.max_alt }}</div>
+            <div class="metric-label">Макс. высота</div>
+            <div class="metric-value">{{ metrics.gps.max_speed }}</div>
+            <div class="metric-label">Макс. скорость</div>
+        </div>
+        {% endif %}
+        
+        {% if metrics.battery %}
+        <div class="metric-card">
+            <h3>🔋 Батарея</h3>
+            <div class="metric-value">{{ metrics.battery.max_voltage }}</div>
+            <div class="metric-label">Макс. напряжение</div>
+            <div class="metric-value">{{ metrics.battery.min_voltage }}</div>
+            <div class="metric-label">Мин. напряжение</div>
+        </div>
+        {% endif %}
+        
+        <div class="metric-card">
+            <h3>📈 Общее</h3>
+            <div class="metric-value">{{ metadata.duration }}</div>
+            <div class="metric-label">Длительность</div>
+            <div class="metric-value">{{ metadata.topics_count }}</div>
+            <div class="metric-label">Топиков данных</div>
+        </div>
+    </div>
+    
+    <!-- Графики -->
+    <div class="charts-section">
+        <h3>📈 Графики телеметрии</h3>
+        
+        <div class="chart-controls">
+            <select id="topicSelect">
+                {% for topic in topics[:10] %}
+                <option value="{{ topic }}">{{ topic }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn" onclick="loadChart()">Показать график</button>
+            <button class="btn secondary" onclick="exportCSV()">📥 Экспорт CSV</button>
+        </div>
+        
+        <div id="chartContainer" class="chart-container">
+            <!-- Сюда вставится Plotly график -->
+            <p>Выберите топик и нажмите "Показать график"</p>
+        </div>
+    </div>
+    
+    <!-- Быстрые действия -->
+    <div class="actions">
+        <a href="/" class="btn">⬅️ Новый анализ</a>
+        <button class="btn secondary" onclick="location.reload()">🔄 Обновить</button>
+    </div>
+</div>
+
+<script>
+const fileId = '{{ file_id }}';
+
+function loadChart() {
+    const topic = document.getElementById('topicSelect').value;
+    const container = document.getElementById('chartContainer');
+    
+    container.innerHTML = '<p>Загрузка графика...</p>';
+    
+    fetch(`/api/log/${fileId}/chart/${topic}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                container.innerHTML = `<p class="error">${data.error}</p>`;
+                return;
+            }
+            
+            Plotly.newPlot('chartContainer', data.chart.data, data.chart.layout);
+        })
+        .catch(error => {
+            container.innerHTML = `<p class="error">Ошибка: ${error.message}</p>`;
+        });
+}
+
+function exportCSV() {
+    const topic = document.getElementById('topicSelect').value;
+    window.open(`/api/log/${fileId}/export/csv?topic=${topic}`, '_blank');
+}
+
+// Автоматически загружаем первый график
+window.onload = function() {
+    if (document.getElementById('topicSelect').value) {
+        setTimeout(loadChart, 500);
+    }
+};
+</script>
+{% endblock %}
