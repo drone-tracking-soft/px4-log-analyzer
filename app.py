@@ -780,7 +780,6 @@ def upload_file():
             'filename': file.filename,
             'duration': result['duration'],
             'start_time': result['start_time'].strftime('%H:%M:%S'),
-            'date': result['start_time'].strftime('%d.%m.%Y'),
             'topics_count': result['topics_count'],
             'has_gps': result['has_gps'],
             'gps_points': len(analyzer.gps_coords),
@@ -1139,7 +1138,6 @@ def dashboard(file_id):
                 </h1>
                 <div class="file-info">
                     <span>⏱️ Длительность: {session_data['duration']:.1f} сек</span>
-                    <span>📅 Дата: {session_data['date']} {session_data['start_time']}</span>
                     <span>📊 Топиков: {session_data['topics_count']}</span>
                     <span>📍 GPS: {'Да (' + str(session_data['gps_points']) + ' точек)' if session_data['has_gps'] else 'Нет'}</span>
                 </div>
