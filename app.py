@@ -876,10 +876,9 @@ def dashboard(file_id):
         """
     
     # HTML для карты если есть GPS
-# HTML для карты если есть GPS
-map_html = ""
-if session_data['has_gps'] and session_data['gps_points'] > 0:
-    map_html = f"""
+    map_html = ""
+    if session_data['has_gps'] and session_data['gps_points'] > 0:
+        map_html = f"""
 <div class="section">
 <div class="section-title">
     🗺️ Траектория полета ({session_data['gps_points']} точек)
@@ -1229,7 +1228,7 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
                 <button onclick="showAllParams()" class="action-btn" style="background: #9b59b6;">
                     📋 Все параметры
                 </button>
-                <button onclick="downloadKML()" class="action-btn" style="background: #27ae60;" {'' if session_data['has_gps'] and session_data['gps_points'] > 0 else 'disabled'}>
+                <button onclick="downloadKML()" class="action-btn" style="background: #27ae60;" {'"disabled"' if not session_data['has_gps'] or session_data['gps_points'] == 0 else ''}>
                     🗺️ Скачать KML
                 </button>
             </div>
@@ -1256,7 +1255,7 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
                     const data = await response.json();
                     
                     if (data.error) {{
-                        chartDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #e74c3c;">${{data.error}}</div>`;
+                        chartDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #e74c3c;">' + data.error + '</div>';
                         return;
                     }}
                     
@@ -1268,21 +1267,21 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
                     }});
                     
                 }} catch (error) {{
-                    chartDiv.innerHTML = `<div style="text-align: center; padding: 40px; color: #e74c3c;">Ошибка: ${{error.message}}</div>`;
+                    chartDiv.innerHTML = '<div style="text-align: center; padding: 40px; color: #e74c3c;">Ошибка: ' + error.message + '</div>';
                 }}
             }}
             
             function exportData() {{
-                window.open(`/api/export/${{fileId}}`, '_blank');
+                window.open('/api/export/' + fileId, '_blank');
             }}
             
             function showAllParams() {{
-                const paramList = parameters.map(p => `• ${{p.icon}} ${{p.name}}: ${{p.stats.current.toFixed(2)}} ${{p.unit}}`).join('\\n');
-                alert(`Все параметры (всего ${{parameters.length}}):\\n\\n${{paramList}}`);
+                const paramList = parameters.map(p => '• ' + p.icon + ' ' + p.name + ': ' + p.stats.current.toFixed(2) + ' ' + p.unit).join('\\n');
+                alert('Все параметры (всего ' + parameters.length + '):\\n\\n' + paramList);
             }}
             
             function downloadKML() {{
-                window.open(`/api/kml/${{fileId}}`, '_blank');
+                window.open('/api/kml/' + fileId, '_blank');
             }}
 
             function showGpsTable() {{
@@ -1302,19 +1301,18 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
             document.getElementById('gpsModal').style.display = 'block';
         }});
 }}
-}
 
-function closeGpsModal() {
+function closeGpsModal() {{
     document.getElementById('gpsModal').style.display = 'none';
-}
+}}
 
 // Закрытие по клику вне окна
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function(e) {{
     const modal = document.getElementById('gpsModal');
-    if (modal.style.display === 'block' && e.target === modal) {
+    if (modal.style.display === 'block' && e.target === modal) {{
         closeGpsModal();
-    }
-});
+    }}
+}});
         
             // Инициализация карты если есть GPS
             if (hasGPS && gpsPoints > 0) {{
@@ -1342,40 +1340,40 @@ document.addEventListener('click', function(e) {
 const points = coords.map(c => [c[0], c[1]]);
 
 // Линия траектории
-const track = L.polyline(points, {
+const track = L.polyline(points, {{
     color: '#3498db',
     weight: 3,
     opacity: 0.8,
     smoothFactor: 1
-}).addTo(map);
+}}).addTo(map);
 
 // Добавляем невидимые маркеры для подсказок
 const markerGroup = L.layerGroup().addTo(map);
-coords.forEach((coord, i) => {
+coords.forEach((coord, i) => {{
     const lat = coord[0];
     const lon = coord[1];
     const alt = coord[2].toFixed(1);
-    const marker = L.circleMarker([lat, lon], {
+    const marker = L.circleMarker([lat, lon], {{
         radius: 0,
         fillOpacity: 0,
         stroke: false
-    }).on('mouseover', function(e) {
+    }}).on('mouseover', function(e) {{
         const popup = L.popup()
             .setLatLng([lat, lon])
-            .setContent(`
-                <div style="font-family: monospace; font-size: 13px;">
-                    Точка ${i + 1}<br>
-                    Широта: ${lat.toFixed(6)}°<br>
-                    Долгота: ${lon.toFixed(6)}°<br>
-                    Высота: ${alt} м
-                </div>
-            `)
+            .setContent(
+                '<div style="font-family: monospace; font-size: 13px;">' +
+                'Точка ' + (i + 1) + '<br>' +
+                'Широта: ' + lat.toFixed(6) + '°<br>' +
+                'Долгота: ' + lon.toFixed(6) + '°<br>' +
+                'Высота: ' + alt + ' м' +
+                '</div>'
+            )
             .openOn(map);
-    }).on('mouseout', function() {
+    }}).on('mouseout', function() {{
         map.closePopup();
-    });
+    }});
     markerGroup.addLayer(marker);
-});
+}});
                                 
                                 // Добавляем маркеры взлета и посадки
                                 if (points.length > 0) {{
@@ -1402,13 +1400,12 @@ coords.forEach((coord, i) => {
                                     const info = L.control({{position: 'topright'}});
                                     info.onAdd = function() {{
                                         const div = L.DomUtil.create('div', 'map-info');
-                                        div.innerHTML = `
-                                            <div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 12px;">
-                                                <strong>Маршрут</strong><br>
-                                                Точки: ${{coords.length}}<br>
-                                                Длина: ~${{calculateDistance(points).toFixed(2)}} км
-                                            </div>
-                                        `;
+                                        div.innerHTML = 
+                                            '<div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 12px;">' +
+                                            '<strong>Маршрут</strong><br>' +
+                                            'Точки: ' + coords.length + '<br>' +
+                                            'Длина: ~' + calculateDistance(points).toFixed(2) + ' км' +
+                                            '</div>';
                                         return div;
                                     }};
                                     info.addTo(map);
@@ -1417,11 +1414,10 @@ coords.forEach((coord, i) => {
                         }})
                         .catch(error => {{
                             console.error('Ошибка загрузки GPS данных:', error);
-                            document.getElementById('map').innerHTML = `
-                                <div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #e74c3c;">
-                                    Ошибка загрузки GPS данных
-                                </div>
-                            `;
+                            document.getElementById('map').innerHTML = 
+                                '<div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #e74c3c;">' +
+                                'Ошибка загрузки GPS данных' +
+                                '</div>';
                         }});
                     
                     // Функция для расчета расстояния
@@ -1681,8 +1677,7 @@ def export_data(file_id):
         csv_lines.append("")
         csv_lines.append(f"Файл;{session_data['filename']}")
         csv_lines.append(f"Длительность;{session_data['duration']:.1f} сек")
-        csv_lines.append(f"Дата;{session_data['date']}")
-        csv_lines.append(f"Время;{session_data['start_time']}")
+        csv_lines.append(f"Дата;{session_data['start_time']}")
         csv_lines.append(f"Всего параметров;{len(session_data['parameters'])}")
         csv_lines.append(f"GPS точек;{session_data['gps_points']}")
         csv_lines.append("")
