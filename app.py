@@ -1328,7 +1328,7 @@ document.addEventListener('click', function(e) {{
                                 const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
                                 
                                 const map = L.map('map', {{
-                                    attributionControl: false
+                                    attributionControl: false,
                                     maxZoom: 25,
                                     minZoom: 1,
                                     zoomControl: true,
@@ -1339,7 +1339,7 @@ document.addEventListener('click', function(e) {{
                                     zoomDelta: 0.5
                                 }}).setView([centerLat, centerLon], 15);
                                 
-                                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                                L.tileLayer('https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png', {{
                                     maxZoom: 20,
                                     attribution: false
                                 }}).addTo(map);
