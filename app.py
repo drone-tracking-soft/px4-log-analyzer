@@ -876,17 +876,75 @@ def dashboard(file_id):
         """
     
     # HTML для карты если есть GPS
-    map_html = ""
-    if session_data['has_gps'] and session_data['gps_points'] > 0:
-        map_html = f"""
-        <div class="section">
-            <div class="section-title">🗺️ Траектория полета ({session_data['gps_points']} точек)</div>
-            <div id="map" style="height: 400px; border-radius: 12px; margin-top: 20px;"></div>
-            <div style="margin-top: 10px; font-size: 14px; color: #666;">
-                Для навигации используйте колесо мыши, для перемещения — зажатие левой кнопки
-            </div>
-        </div>
-        """
+# HTML для карты если есть GPS
+map_html = ""
+if session_data['has_gps'] and session_data['gps_points'] > 0:
+    map_html = f"""
+<div class="section">
+<div class="section-title">
+    🗺️ Траектория полета ({session_data['gps_points']} точек)
+    <button onclick="showGpsTable()" style="
+        margin-left: 15px;
+        padding: 6px 12px;
+        background: #27ae60;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+    ">📋 Все координаты</button>
+</div>
+<div id="map" style="height: 400px; border-radius: 12px; margin-top: 20px;"></div>
+<div style="margin-top: 10px; font-size: 14px; color: #666;">
+    Для навигации используйте колесо мыши, для перемещения — зажатие левой кнопки
+</div>
+
+<!-- Модальное окно -->
+<div id="gpsModal" style="
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.6);
+">
+    <div style="
+        background: white;
+        margin: 40px auto;
+        padding: 20px;
+        width: 90%;
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    ">
+        <h3 style="margin-bottom: 15px;">📍 Все GPS-точки полёта</h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+                <tr style="background: #f1f1f1;">
+                    <th style="padding: 8px; text-align: left;">№</th>
+                    <th style="padding: 8px; text-align: left;">Широта</th>
+                    <th style="padding: 8px; text-align: left;">Долгота</th>
+                    <th style="padding: 8px; text-align: left;">Высота (м)</th>
+                </tr>
+            </thead>
+            <tbody id="gpsTableBody">
+            </tbody>
+        </table>
+        <button onclick="closeGpsModal()" style="
+            margin-top: 15px;
+            padding: 8px 20px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        ">Закрыть</button>
+    </div>
+</div>
+</div>
+"""
     
     return f"""
     <!DOCTYPE html>
@@ -1226,7 +1284,39 @@ def dashboard(file_id):
             function downloadKML() {{
                 window.open(`/api/kml/${{fileId}}`, '_blank');
             }}
-            
+
+            function showGpsTable() {
+    fetch(`/api/gps/${fileId}`)
+        .then(response => response.json())
+        .then(coords => {
+            const tbody = document.getElementById('gpsTableBody');
+            tbody.innerHTML = '';
+            coords.forEach((coord, i) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td>${coord[0].toFixed(6)}</td>
+                    <td>${coord[1].toFixed(6)}</td>
+                    <td>${parseFloat(coord[2]).toFixed(1)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            document.getElementById('gpsModal').style.display = 'block';
+        });
+}
+
+function closeGpsModal() {
+    document.getElementById('gpsModal').style.display = 'none';
+}
+
+// Закрытие по клику вне окна
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('gpsModal');
+    if (modal.style.display === 'block' && e.target === modal) {
+        closeGpsModal();
+    }
+});
+        
             // Инициализация карты если есть GPS
             if (hasGPS && gpsPoints > 0) {{
                 setTimeout(() => {{
@@ -1250,13 +1340,43 @@ def dashboard(file_id):
                                 }}).addTo(map);
                                
                                 
-                                const points = coords.map(c => [c[0], c[1]]);
-                                const track = L.polyline(points, {{
-                                    color: '#3498db',
-                                    weight: 3,
-                                    opacity: 0.8,
-                                    smoothFactor: 1
-                                }}).addTo(map);
+const points = coords.map(c => [c[0], c[1]]);
+
+// Линия траектории
+const track = L.polyline(points, {
+    color: '#3498db',
+    weight: 3,
+    opacity: 0.8,
+    smoothFactor: 1
+}).addTo(map);
+
+// Добавляем невидимые маркеры для подсказок
+const markerGroup = L.layerGroup().addTo(map);
+coords.forEach((coord, i) => {
+    const lat = coord[0];
+    const lon = coord[1];
+    const alt = coord[2].toFixed(1);
+    const marker = L.circleMarker([lat, lon], {
+        radius: 0,
+        fillOpacity: 0,
+        stroke: false
+    }).on('mouseover', function(e) {
+        const popup = L.popup()
+            .setLatLng([lat, lon])
+            .setContent(`
+                <div style="font-family: monospace; font-size: 13px;">
+                    Точка ${i + 1}<br>
+                    Широта: ${lat.toFixed(6)}°<br>
+                    Долгота: ${lon.toFixed(6)}°<br>
+                    Высота: ${alt} м
+                </div>
+            `)
+            .openOn(map);
+    }).on('mouseout', function() {
+        map.closePopup();
+    });
+    markerGroup.addLayer(marker);
+});
                                 
                                 // Добавляем маркеры взлета и посадки
                                 if (points.length > 0) {{
