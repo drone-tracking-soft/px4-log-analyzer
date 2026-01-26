@@ -1324,9 +1324,9 @@ def dashboard(file_id):
                 const ms = Math.floor((seconds % 1) * 1000);
                 
                 if (mins > 0) {{
-                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                    return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0') + '.' + ms.toString().padStart(3, '0');
                 }} else {{
-                    return `${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                    return secs.toString().padStart(2, '0') + '.' + ms.toString().padStart(3, '0');
                 }}
             }}
             
@@ -1339,9 +1339,9 @@ def dashboard(file_id):
                 const ms = Math.floor((seconds % 1) * 1000);
                 
                 if (mins > 0) {{
-                    return `${mins} мин ${secs} сек ${ms} мс`;
+                    return mins + ' мин ' + secs + ' сек ' + ms + ' мс';
                 }} else {{
-                    return `${secs} сек ${ms} мс`;
+                    return secs + ' сек ' + ms + ' мс';
                 }}
             }}
 
