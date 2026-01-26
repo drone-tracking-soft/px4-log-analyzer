@@ -212,25 +212,31 @@ class EnhancedAnalyzer:
                             else:
                                 alt = alt_raw
                     
+                    # Получаем время если есть
+                    timestamp = None
+                    time_sec = None
+                    if 'timestamp' in df.columns:
+                        timestamp = int(df.iloc[i]['timestamp'])
+                        time_sec = (timestamp - self.ulog.start_timestamp) / 1e6
+                    
                     # Проверяем, что координаты валидны
                     if -90 <= lat <= 90 and -180 <= lon <= 180:
-                        self.gps_coords.append([lat, lon, alt])
+                        # Сохраняем координаты с временем
+                        self.gps_coords.append({
+                            'lat': lat,
+                            'lon': lon,
+                            'alt': alt,
+                            'timestamp': timestamp,
+                            'time_sec': time_sec
+                        })
                         
                 except (ValueError, TypeError, KeyError, IndexError) as e:
                     continue
             
-            # Если нашли точки, сортируем по времени (если есть timestamp)
-            if self.gps_coords and 'timestamp' in df.columns:
+            # Сортируем по времени если есть временные метки
+            if self.gps_coords and any('timestamp' in coord for coord in self.gps_coords):
                 try:
-                    # Создаем DataFrame для сортировки
-                    gps_df = pd.DataFrame(self.gps_coords, columns=['lat', 'lon', 'alt'])
-                    
-                    # Берем соответствующие временные метки
-                    indices = list(range(0, min(len(df), 2000), step))
-                    if len(indices) >= len(gps_df):
-                        gps_df['timestamp'] = [df.iloc[i]['timestamp'] for i in indices[:len(gps_df)]]
-                        gps_df = gps_df.sort_values('timestamp')
-                        self.gps_coords = gps_df[['lat', 'lon', 'alt']].values.tolist()
+                    self.gps_coords.sort(key=lambda x: x.get('timestamp', 0))
                 except Exception as e:
                     pass
     
@@ -891,9 +897,9 @@ def dashboard(file_id):
         border-radius: 6px;
         font-size: 13px;
         cursor: pointer;
-    ">📋 Все координаты</button>
+    ">📋 Все координаты с временем</button>
     <div style="display: inline-block; margin-left: 15px; font-size: 13px; color: #666;">
-        Используйте панель в правом верхнем углу для переключения слоев карты
+        Наведите на траекторию для просмотра времени прохождения точек
     </div>
 </div>
 <div id="map" style="height: 500px; border-radius: 12px; margin-top: 20px;"></div>
@@ -901,10 +907,10 @@ def dashboard(file_id):
     <div style="display: inline-block; margin-right: 20px;">
         <strong>Управление:</strong> 
         • Колесо мыши — масштаб • Зажатие ЛКМ — перемещение 
-        • Двойной клик — быстрое увеличение • Слои: Карта/Спутник
+        • Двойной клик — быстрое увеличение • Слои: Спутник/Карта
     </div>
     <div style="display: inline-block; margin-left: 20px;">
-        <strong>Макс. масштаб:</strong> 20x (детализация до отдельных зданий)
+        <strong>Макс. масштаб:</strong> 22x (с временными метками)
     </div>
 </div>
 
@@ -922,13 +928,13 @@ def dashboard(file_id):
         margin: 40px auto;
         padding: 20px;
         width: 90%;
-        max-width: 800px;
+        max-width: 1000px;
         max-height: 80vh;
         overflow-y: auto;
         border-radius: 12px;
         box-shadow: 0 10px 30px rgba(0,0,0,0.4);
     ">
-        <h3 style="margin-bottom: 15px;">📍 Все GPS-точки полёта</h3>
+        <h3 style="margin-bottom: 15px;">📍 Все GPS-точки полёта с временем</h3>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
             <thead>
                 <tr style="background: #f1f1f1;">
@@ -936,6 +942,8 @@ def dashboard(file_id):
                     <th style="padding: 8px; text-align: left;">Широта</th>
                     <th style="padding: 8px; text-align: left;">Долгота</th>
                     <th style="padding: 8px; text-align: left;">Высота (м)</th>
+                    <th style="padding: 8px; text-align: left;">Время (с)</th>
+                    <th style="padding: 8px; text-align: left;">Формат времени</th>
                 </tr>
             </thead>
             <tbody id="gpsTableBody">
@@ -1307,6 +1315,36 @@ def dashboard(file_id):
                 window.open('/api/kml/' + fileId, '_blank');
             }}
 
+            // Функция для форматирования времени
+            function formatTime(seconds) {{
+                if (seconds === null || seconds === undefined) return 'N/A';
+                
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                const ms = Math.floor((seconds % 1) * 1000);
+                
+                if (mins > 0) {{
+                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                }} else {{
+                    return `${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                }}
+            }}
+            
+            // Функция для форматирования времени в читаемый вид
+            function formatTimeHuman(seconds) {{
+                if (seconds === null || seconds === undefined) return 'N/A';
+                
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                const ms = Math.floor((seconds % 1) * 1000);
+                
+                if (mins > 0) {{
+                    return `${mins} мин ${secs} сек ${ms} мс`;
+                }} else {{
+                    return `${secs} сек ${ms} мс`;
+                }}
+            }}
+
             function showGpsTable() {{
     fetch('/api/gps/' + fileId)
         .then(response => response.json())
@@ -1314,11 +1352,19 @@ def dashboard(file_id):
             const tbody = document.getElementById('gpsTableBody');
             tbody.innerHTML = '';
             coords.forEach((coord, i) => {{
+                const lat = coord[0];
+                const lon = coord[1];
+                const alt = coord[2];
+                const timestamp = coord[3];
+                const time_sec = coord[4];
+                
                 const row = document.createElement('tr');
                 row.innerHTML = '<td>' + (i + 1) + '</td>' +
-                                '<td>' + coord[0].toFixed(6) + '</td>' +
-                                '<td>' + coord[1].toFixed(6) + '</td>' +
-                                '<td>' + parseFloat(coord[2]).toFixed(1) + '</td>';
+                                '<td>' + lat.toFixed(6) + '</td>' +
+                                '<td>' + lon.toFixed(6) + '</td>' +
+                                '<td>' + parseFloat(alt).toFixed(1) + '</td>' +
+                                '<td>' + (time_sec ? time_sec.toFixed(3) : 'N/A') + '</td>' +
+                                '<td>' + (time_sec ? formatTime(time_sec) : 'N/A') + '</td>';
                 tbody.appendChild(row);
             }});
             document.getElementById('gpsModal').style.display = 'block';
@@ -1344,50 +1390,67 @@ document.addEventListener('click', function(e) {{
                         .then(response => response.json())
                         .then(coords => {{
                             if (coords.length > 0) {{
+                                // Преобразуем координаты в удобный формат
+                                const coordsData = coords.map(c => ({{
+                                    lat: c[0],
+                                    lon: c[1],
+                                    alt: c[2],
+                                    timestamp: c[3],
+                                    time_sec: c[4]
+                                }}));
+                                
                                 // Вычисляем центр траектории
-                                const lats = coords.map(c => c[0]);
-                                const lons = coords.map(c => c[1]);
+                                const lats = coordsData.map(c => c.lat);
+                                const lons = coordsData.map(c => c.lon);
                                 const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
                                 const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
                                 
                                 // Создаем карту с увеличенным масштабированием
                                 const map = L.map('map', {{
                                     attributionControl: false,
-                                    maxZoom: 20,  // Максимальный zoom для ESRI
+                                    maxZoom: 22,        // Разрешаем зум до 22
                                     minZoom: 3,
                                     zoomControl: true,
                                     scrollWheelZoom: true,
                                     doubleClickZoom: true,
                                     touchZoom: true,
                                     zoomSnap: 0.1,
-                                    zoomDelta: 0.5
+                                    zoomDelta: 0.5,
+                                    updateWhenZooming: false,
+                                    updateWhenIdle: true
                                 }}).setView([centerLat, centerLon], 15);
                                 
-                                // Основной слой: ESRI Satellite (макс. zoom 20)
+                                // Основной слой: ESRI Satellite
                                 const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
-                                    maxZoom: 20,
-                                    attribution: '© Esri, Maxar, Earthstar Geographics, и др.'
+                                    maxZoom: 22,
+                                    maxNativeZoom: 20,
+                                    attribution: '© Esri, Maxar, Earthstar Geographics, и др.',
+                                    detectRetina: true,
+                                    updateWhenZooming: false
                                 }});
                                 
-                                // Альтернативный слой: OpenStreetMap (макс. zoom 19)
+                                // Альтернативный слой: OpenStreetMap
                                 const openStreetMap = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-                                    maxZoom: 19,
-                                    attribution: '© OpenStreetMap contributors'
+                                    maxZoom: 22,
+                                    maxNativeZoom: 19,
+                                    attribution: '© OpenStreetMap contributors',
+                                    detectRetina: true,
+                                    updateWhenZooming: false
                                 }});
                                 
-                                // Добавляем ESRI по умолчанию (лучший zoom)
+                                // Добавляем ESRI по умолчанию
                                 esriSatellite.addTo(map);
                                 
                                 // Создаем переключатель слоев
                                 const baseLayers = {{
-                                    "Спутник (max zoom 20)": esriSatellite,
-                                    "Карта (max zoom 19)": openStreetMap
+                                    "Спутник (zoom 20+2)": esriSatellite,
+                                    "Карта (zoom 19+3)": openStreetMap
                                 }};
                                 
                                 // Добавляем панель переключения слоев
                                 L.control.layers(baseLayers).addTo(map);
                                 
-                                const points = coords.map(c => [c[0], c[1]]);
+                                const points = coordsData.map(c => [c.lat, c.lon]);
 
                                 // Линия траектории
                                 const track = L.polyline(points, {{
@@ -1397,12 +1460,16 @@ document.addEventListener('click', function(e) {{
                                     smoothFactor: 1
                                 }}).addTo(map);
 
-                                // Добавляем невидимые маркеры для подсказок по всей траектории
+                                // Добавляем невидимые маркеры для подсказок с временем
                                 const markerGroup = L.layerGroup().addTo(map);
-                                coords.forEach((coord, i) => {{
-                                    const lat = coord[0];
-                                    const lon = coord[1];
-                                    const alt = coord[2].toFixed(1);
+                                coordsData.forEach((coord, i) => {{
+                                    const lat = coord.lat;
+                                    const lon = coord.lon;
+                                    const alt = coord.alt.toFixed(1);
+                                    const timeSec = coord.time_sec;
+                                    const timeFormatted = timeSec ? formatTime(timeSec) : 'N/A';
+                                    const timeHuman = timeSec ? formatTimeHuman(timeSec) : 'N/A';
+                                    
                                     const marker = L.circleMarker([lat, lon], {{
                                         radius: 0,
                                         fillOpacity: 0,
@@ -1411,11 +1478,21 @@ document.addEventListener('click', function(e) {{
                                         const popup = L.popup()
                                             .setLatLng([lat, lon])
                                             .setContent(
-                                                '<div style="font-family: monospace; font-size: 13px;">' +
-                                                '<strong>Точка ' + (i + 1) + ' из ' + coords.length + '</strong><br>' +
+                                                '<div style="font-family: monospace; font-size: 13px; max-width: 300px;">' +
+                                                '<strong>Точка ' + (i + 1) + ' из ' + coordsData.length + '</strong><br>' +
+                                                '<hr style="margin: 5px 0;">' +
+                                                '<strong>Координаты:</strong><br>' +
                                                 'Широта: ' + lat.toFixed(6) + '°<br>' +
                                                 'Долгота: ' + lon.toFixed(6) + '°<br>' +
-                                                'Высота: ' + alt + ' м' +
+                                                'Высота: ' + alt + ' м<br>' +
+                                                '<hr style="margin: 5px 0;">' +
+                                                '<strong>Время:</strong><br>' +
+                                                'От старта: ' + timeFormatted + '<br>' +
+                                                '(' + timeHuman + ')<br>' +
+                                                (i > 0 ? '<hr style="margin: 5px 0;">' + 
+                                                '<strong>От предыдущей точки:</strong><br>' +
+                                                'Время: ' + formatTime(timeSec - coordsData[i-1].time_sec) + '<br>' +
+                                                'Расстояние: ' + calculateDistance([[coordsData[i-1].lat, coordsData[i-1].lon], [lat, lon]]).toFixed(2) + ' км' : '') +
                                                 '</div>'
                                             )
                                             .openOn(map);
@@ -1425,12 +1502,11 @@ document.addEventListener('click', function(e) {{
                                     markerGroup.addLayer(marker);
                                 }});
                                 
-                                // Добавляем маркеры взлета и посадки с координатами
+                                // Добавляем маркеры взлета и посадки с временем
                                 if (points.length > 0) {{
                                     // Взлет - точка 1
-                                    const takeoffLat = points[0][0];
-                                    const takeoffLon = points[0][1];
-                                    const takeoffAlt = coords[0][2].toFixed(1);
+                                    const takeoff = coordsData[0];
+                                    const takeoffTime = takeoff.time_sec;
                                     
                                     const takeoffMarker = L.marker(points[0], {{
                                         icon: L.divIcon({{
@@ -1442,20 +1518,25 @@ document.addEventListener('click', function(e) {{
                                     }}).addTo(map);
                                     
                                     takeoffMarker.bindPopup(
-                                        '<div style="font-family: monospace; font-size: 14px; max-width: 250px;">' +
+                                        '<div style="font-family: monospace; font-size: 14px; max-width: 300px;">' +
                                         '<strong style="color: #2ecc71;">🚀 Точка взлета</strong><br>' +
-                                        'Широта: ' + takeoffLat.toFixed(6) + '°<br>' +
-                                        'Долгота: ' + takeoffLon.toFixed(6) + '°<br>' +
-                                        'Высота: ' + takeoffAlt + ' м<br>' +
-                                        '<hr style="margin: 8px 0;">' +
-                                        '<em>Точка 1 из ' + coords.length + '</em>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<strong>Координаты:</strong><br>' +
+                                        'Широта: ' + takeoff.lat.toFixed(6) + '°<br>' +
+                                        'Долгота: ' + takeoff.lon.toFixed(6) + '°<br>' +
+                                        'Высота: ' + takeoff.alt.toFixed(1) + ' м<br>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<strong>Время:</strong><br>' +
+                                        'От старта: ' + (takeoffTime ? formatTime(takeoffTime) : '0:00.000') + '<br>' +
+                                        (takeoffTime ? '(' + formatTimeHuman(takeoffTime) + ')' : '') + '<br>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<em>Точка 1 из ' + coordsData.length + '</em>' +
                                         '</div>'
                                     );
                                     
                                     // Посадка - последняя точка
-                                    const landingLat = points[points.length-1][0];
-                                    const landingLon = points[points.length-1][1];
-                                    const landingAlt = coords[coords.length-1][2].toFixed(1);
+                                    const landing = coordsData[coordsData.length-1];
+                                    const landingTime = landing.time_sec;
                                     
                                     const landingMarker = L.marker(points[points.length-1], {{
                                         icon: L.divIcon({{
@@ -1467,32 +1548,44 @@ document.addEventListener('click', function(e) {{
                                     }}).addTo(map);
                                     
                                     landingMarker.bindPopup(
-                                        '<div style="font-family: monospace; font-size: 14px; max-width: 250px;">' +
+                                        '<div style="font-family: monospace; font-size: 14px; max-width: 300px;">' +
                                         '<strong style="color: #e74c3c;">🛬 Точка посадки</strong><br>' +
-                                        'Широта: ' + landingLat.toFixed(6) + '°<br>' +
-                                        'Долгота: ' + landingLon.toFixed(6) + '°<br>' +
-                                        'Высота: ' + landingAlt + ' м<br>' +
-                                        '<hr style="margin: 8px 0;">' +
-                                        '<em>Точка ' + coords.length + ' из ' + coords.length + '</em>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<strong>Координаты:</strong><br>' +
+                                        'Широта: ' + landing.lat.toFixed(6) + '°<br>' +
+                                        'Долгота: ' + landing.lon.toFixed(6) + '°<br>' +
+                                        'Высота: ' + landing.alt.toFixed(1) + ' м<br>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<strong>Время:</strong><br>' +
+                                        'От старта: ' + (landingTime ? formatTime(landingTime) : 'N/A') + '<br>' +
+                                        (landingTime ? '(' + formatTimeHuman(landingTime) + ')' : '') + '<br>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<strong>Длительность полета:</strong><br>' +
+                                        (takeoffTime && landingTime ? formatTime(landingTime - takeoffTime) : 'N/A') + '<br>' +
+                                        (takeoffTime && landingTime ? '(' + formatTimeHuman(landingTime - takeoffTime) + ')' : '') + '<br>' +
+                                        '<hr style="margin: 5px 0;">' +
+                                        '<em>Точка ' + coordsData.length + ' из ' + coordsData.length + '</em>' +
                                         '</div>'
                                     );
                                     
                                     // Масштабируем чтобы вся траектория была видна
                                     map.fitBounds(track.getBounds());
                                     
-                                    // Добавляем информацию о маршруте
+                                    // Добавляем информацию о маршруте с временем
                                     const info = L.control({{position: 'topright'}});
                                     info.onAdd = function() {{
                                         const div = L.DomUtil.create('div', 'map-info');
+                                        const totalTime = takeoffTime && landingTime ? landingTime - takeoffTime : 0;
                                         div.innerHTML = 
                                             '<div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 12px;">' +
                                             '<strong>Маршрут полета</strong><br>' +
-                                            'Точек: ' + coords.length + '<br>' +
+                                            'Точек: ' + coordsData.length + '<br>' +
                                             'Длина: ~' + calculateDistance(points).toFixed(2) + ' км<br>' +
+                                            (totalTime > 0 ? 'Время: ' + formatTime(totalTime) + '<br>' : '') +
                                             '<hr style="margin: 5px 0;">' +
                                             '<strong>Слои карты:</strong><br>' +
-                                            '• Спутник - до 20x zoom<br>' +
-                                            '• Карта - до 19x zoom' +
+                                            '• Спутник - до 22x zoom<br>' +
+                                            '• Карта - до 22x zoom' +
                                             '</div>';
                                         return div;
                                     }};
@@ -1520,14 +1613,31 @@ document.addEventListener('click', function(e) {{
                                         div.innerHTML = 
                                             '<div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 11px;">' +
                                             '<strong>Обозначения:</strong><br>' +
-                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px;">🚀</span><div style="margin-left: 5px;">Взлет</div></div>' +
-                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px;">🛬</span><div style="margin-left: 5px;">Посадка</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px; color: #2ecc71;">🚀</span><div style="margin-left: 5px;">Взлет (T+0)</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px; color: #e74c3c;">🛬</span><div style="margin-left: 5px;">Посадка</div></div>' +
                                             '<div style="display: flex; align-items: center; margin: 3px 0;"><div style="width: 15px; height: 3px; background: #3498db; margin-right: 5px;"></div><div>Траектория</div></div>' +
-                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><div style="width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 1px dashed #ccc; margin-right: 5px;"></div><div>Наведите для координат</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><div style="width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 1px dashed #ccc; margin-right: 5px;"></div><div>Наведите для времени</div></div>' +
                                             '</div>';
                                         return div;
                                     }};
                                     legendControl.addTo(map);
+                                    
+                                    // Добавляем отображение текущего зума
+                                    const zoomInfo = L.control({{position: 'bottomright'}});
+                                    zoomInfo.onAdd = function() {{
+                                        const div = L.DomUtil.create('div', 'zoom-info');
+                                        div.innerHTML = 
+                                            '<div style="background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 3px; font-size: 12px; border: 1px solid #ddd;">' +
+                                            'Zoom: <span id="currentZoom">' + map.getZoom().toFixed(1) + '</span>' +
+                                            '</div>';
+                                        return div;
+                                    }};
+                                    zoomInfo.addTo(map);
+                                    
+                                    // Обновляем отображение зума
+                                    map.on('zoomend', function() {{
+                                        document.getElementById('currentZoom').textContent = map.getZoom().toFixed(1);
+                                    }});
                                 }}
                             }}
                         }})
@@ -1681,7 +1791,18 @@ def get_gps_coords(file_id):
         if session_data.get('file_path') and os.path.exists(session_data['file_path']):
             analyzer = EnhancedAnalyzer(session_data['file_path'])
             analyzer.analyze()
-            return jsonify(analyzer.gps_coords)
+            
+            # Возвращаем как массив массивов для обратной совместимости
+            coords_data = []
+            for coord in analyzer.gps_coords:
+                coords_data.append([
+                    coord.get('lat', 0),
+                    coord.get('lon', 0),
+                    coord.get('alt', 0),
+                    coord.get('timestamp', 0),
+                    coord.get('time_sec', 0)
+                ])
+            return jsonify(coords_data)
         else:
             # Если файл удален, возвращаем пустой массив
             return jsonify([])
@@ -1732,7 +1853,7 @@ def get_kml(file_id):
         
         # Добавляем координаты
         for coord in analyzer.gps_coords:
-            kml_content += f'          {coord[1]},{coord[0]},{coord[2]}\n'
+            kml_content += f'          {coord.get("lon", 0)},{coord.get("lat", 0)},{coord.get("alt", 0)}\n'
         
         kml_content += '''        </coordinates>
       </LineString>
@@ -1743,7 +1864,7 @@ def get_kml(file_id):
         <coordinates>
 '''
         if analyzer.gps_coords:
-            kml_content += f'          {analyzer.gps_coords[0][1]},{analyzer.gps_coords[0][0]},{analyzer.gps_coords[0][2]}\n'
+            kml_content += f'          {analyzer.gps_coords[0].get("lon", 0)},{analyzer.gps_coords[0].get("lat", 0)},{analyzer.gps_coords[0].get("alt", 0)}\n'
         
         kml_content += '''        </coordinates>
       </Point>
@@ -1754,7 +1875,7 @@ def get_kml(file_id):
         <coordinates>
 '''
         if analyzer.gps_coords:
-            kml_content += f'          {analyzer.gps_coords[-1][1]},{analyzer.gps_coords[-1][0]},{analyzer.gps_coords[-1][2]}\n'
+            kml_content += f'          {analyzer.gps_coords[-1].get("lon", 0)},{analyzer.gps_coords[-1].get("lat", 0)},{analyzer.gps_coords[-1].get("alt", 0)}\n'
         
         kml_content += '''        </coordinates>
       </Point>
@@ -1870,6 +1991,7 @@ if __name__ == '__main__':
     print("• 20+ параметров с группировкой по категориям")
     print("• Исправленная высота (инвертированная для локальной)")
     print("• Поддержка GPS карт и экспорт KML")
+    print("• Временные метки для всех GPS точек")
     print("=" * 60)
     print("Сервер запущен: http://localhost:5000")
     print("=" * 60)
