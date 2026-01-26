@@ -1423,7 +1423,7 @@ document.addEventListener('click', function(e) {{
                                 // Основной слой: ESRI Satellite
                                 const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
                                     maxZoom: 22,
-                                    maxNativeZoom: 20,
+                                    maxNativeZoom: 22,
                                     attribution: '© Esri, Maxar, Earthstar Geographics, и др.',
                                     detectRetina: true,
                                     updateWhenZooming: false
@@ -1432,7 +1432,7 @@ document.addEventListener('click', function(e) {{
                                 // Альтернативный слой: OpenStreetMap
                                 const openStreetMap = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
                                     maxZoom: 22,
-                                    maxNativeZoom: 19,
+                                    maxNativeZoom: 22,
                                     attribution: '© OpenStreetMap contributors',
                                     detectRetina: true,
                                     updateWhenZooming: false
