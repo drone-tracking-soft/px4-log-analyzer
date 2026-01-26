@@ -1426,7 +1426,7 @@ document.addEventListener('click', function(e) {{
                                     maxNativeZoom: 20,
                                     attribution: '© Esri, Maxar, Earthstar Geographics, и др.',
                                     detectRetina: true,
-                                    updateWhenZooming: false
+                                    updateWhenZooming: false,
                                     zoomAnimation: true
                                 }});
                                 
@@ -1436,7 +1436,7 @@ document.addEventListener('click', function(e) {{
                                     maxNativeZoom: 19,
                                     attribution: '© OpenStreetMap contributors',
                                     detectRetina: true,
-                                    updateWhenZooming: false
+                                    updateWhenZooming: false,
                                     zoomAnimation: true
                                 }});
                                 
