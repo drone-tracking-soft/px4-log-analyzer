@@ -1252,7 +1252,7 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
                 chartDiv.innerHTML = '<div style="display: flex; justify-content: center; align-items: center; height: 100%;">Загрузка графика...</div>';
                 
                 try {{
-                    const response = await fetch(`/api/chart/${{fileId}}/${{paramId}}`);
+                    const response = await fetch('/api/chart/' + fileId + '/' + paramId);
                     const data = await response.json();
                     
                     if (data.error) {{
@@ -1285,24 +1285,23 @@ if session_data['has_gps'] and session_data['gps_points'] > 0:
                 window.open(`/api/kml/${{fileId}}`, '_blank');
             }}
 
-            function showGpsTable() {
-    fetch(`/api/gps/${fileId}`)
+            function showGpsTable() {{
+    fetch('/api/gps/' + fileId)
         .then(response => response.json())
-        .then(coords => {
+        .then(coords => {{
             const tbody = document.getElementById('gpsTableBody');
             tbody.innerHTML = '';
-            coords.forEach((coord, i) => {
+            coords.forEach((coord, i) => {{
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${i + 1}</td>
-                    <td>${coord[0].toFixed(6)}</td>
-                    <td>${coord[1].toFixed(6)}</td>
-                    <td>${parseFloat(coord[2]).toFixed(1)}</td>
-                `;
+                row.innerHTML = '<td>' + (i + 1) + '</td>' +
+                                '<td>' + coord[0].toFixed(6) + '</td>' +
+                                '<td>' + coord[1].toFixed(6) + '</td>' +
+                                '<td>' + parseFloat(coord[2]).toFixed(1) + '</td>';
                 tbody.appendChild(row);
-            });
+            }});
             document.getElementById('gpsModal').style.display = 'block';
-        });
+        }});
+}}
 }
 
 function closeGpsModal() {
@@ -1320,7 +1319,7 @@ document.addEventListener('click', function(e) {
             // Инициализация карты если есть GPS
             if (hasGPS && gpsPoints > 0) {{
                 setTimeout(() => {{
-                    fetch(`/api/gps/${{fileId}}`)
+                    fetch('/api/gps/' + fileId)
                         .then(response => response.json())
                         .then(coords => {{
                             if (coords.length > 0) {{
