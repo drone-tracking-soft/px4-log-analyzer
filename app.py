@@ -1329,9 +1329,17 @@ document.addEventListener('click', function(e) {{
                                 
                                 const map = L.map('map', {{
                                     attributionControl: false
+                                    maxZoom: 25,
+                                    minZoom: 1,
+                                    zoomControl: true,
+                                    scrollWheelZoom: true,
+                                    doubleClickZoom: true,
+                                    touchZoom: true,
+                                    zoomSnap: 0.1,
+                                    zoomDelta: 0.5
                                 }}).setView([centerLat, centerLon], 15);
                                 
-                                L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{{z}}/{{x}}/{{y}}{{r}}.png', {{
+                                L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                                     maxZoom: 20,
                                     attribution: false
                                 }}).addTo(map);
