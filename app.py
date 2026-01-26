@@ -892,10 +892,20 @@ def dashboard(file_id):
         font-size: 13px;
         cursor: pointer;
     ">📋 Все координаты</button>
+    <div style="display: inline-block; margin-left: 15px; font-size: 13px; color: #666;">
+        Используйте панель в правом верхнем углу для переключения слоев карты
+    </div>
 </div>
-<div id="map" style="height: 400px; border-radius: 12px; margin-top: 20px;"></div>
+<div id="map" style="height: 500px; border-radius: 12px; margin-top: 20px;"></div>
 <div style="margin-top: 10px; font-size: 14px; color: #666;">
-    Для навигации используйте колесо мыши, для перемещения — зажатие левой кнопки
+    <div style="display: inline-block; margin-right: 20px;">
+        <strong>Управление:</strong> 
+        • Колесо мыши — масштаб • Зажатие ЛКМ — перемещение 
+        • Двойной клик — быстрое увеличение • Слои: Карта/Спутник
+    </div>
+    <div style="display: inline-block; margin-left: 20px;">
+        <strong>Макс. масштаб:</strong> 20x (детализация до отдельных зданий)
+    </div>
 </div>
 
 <!-- Модальное окно -->
@@ -1183,6 +1193,19 @@ def dashboard(file_id):
                     grid-template-columns: 1fr;
                 }}
             }}
+            
+            /* Стили для маркеров полета */
+            .flight-marker {{
+                font-size: 24px;
+                text-align: center;
+            }}
+            
+            .leaflet-control-layers {{
+                background: white;
+                border-radius: 4px;
+                padding: 5px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }}
         </style>
     </head>
     <body>
@@ -1327,10 +1350,11 @@ document.addEventListener('click', function(e) {{
                                 const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
                                 const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
                                 
+                                // Создаем карту с увеличенным масштабированием
                                 const map = L.map('map', {{
                                     attributionControl: false,
-                                    maxZoom: 25,
-                                    minZoom: 1,
+                                    maxZoom: 20,  // Максимальный zoom для ESRI
+                                    minZoom: 3,
                                     zoomControl: true,
                                     scrollWheelZoom: true,
                                     doubleClickZoom: true,
@@ -1339,67 +1363,119 @@ document.addEventListener('click', function(e) {{
                                     zoomDelta: 0.5
                                 }}).setView([centerLat, centerLon], 15);
                                 
-                                L.tileLayer('https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png', {{
+                                // Основной слой: ESRI Satellite (макс. zoom 20)
+                                const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}', {{
                                     maxZoom: 20,
-                                    attribution: false
+                                    attribution: '© Esri, Maxar, Earthstar Geographics, и др.'
+                                }});
+                                
+                                // Альтернативный слой: OpenStreetMap (макс. zoom 19)
+                                const openStreetMap = L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                                    maxZoom: 19,
+                                    attribution: '© OpenStreetMap contributors'
+                                }});
+                                
+                                // Добавляем ESRI по умолчанию (лучший zoom)
+                                esriSatellite.addTo(map);
+                                
+                                // Создаем переключатель слоев
+                                const baseLayers = {{
+                                    "Спутник (max zoom 20)": esriSatellite,
+                                    "Карта (max zoom 19)": openStreetMap
+                                }};
+                                
+                                // Добавляем панель переключения слоев
+                                L.control.layers(baseLayers).addTo(map);
+                                
+                                const points = coords.map(c => [c[0], c[1]]);
+
+                                // Линия траектории
+                                const track = L.polyline(points, {{
+                                    color: '#3498db',
+                                    weight: 3,
+                                    opacity: 0.8,
+                                    smoothFactor: 1
                                 }}).addTo(map);
-                               
-                                
-const points = coords.map(c => [c[0], c[1]]);
 
-// Линия траектории
-const track = L.polyline(points, {{
-    color: '#3498db',
-    weight: 3,
-    opacity: 0.8,
-    smoothFactor: 1
-}}).addTo(map);
-
-// Добавляем невидимые маркеры для подсказок
-const markerGroup = L.layerGroup().addTo(map);
-coords.forEach((coord, i) => {{
-    const lat = coord[0];
-    const lon = coord[1];
-    const alt = coord[2].toFixed(1);
-    const marker = L.circleMarker([lat, lon], {{
-        radius: 0,
-        fillOpacity: 0,
-        stroke: false
-    }}).on('mouseover', function(e) {{
-        const popup = L.popup()
-            .setLatLng([lat, lon])
-            .setContent(
-                '<div style="font-family: monospace; font-size: 13px;">' +
-                'Точка ' + (i + 1) + '<br>' +
-                'Широта: ' + lat.toFixed(6) + '°<br>' +
-                'Долгота: ' + lon.toFixed(6) + '°<br>' +
-                'Высота: ' + alt + ' м' +
-                '</div>'
-            )
-            .openOn(map);
-    }}).on('mouseout', function() {{
-        map.closePopup();
-    }});
-    markerGroup.addLayer(marker);
-}});
+                                // Добавляем невидимые маркеры для подсказок по всей траектории
+                                const markerGroup = L.layerGroup().addTo(map);
+                                coords.forEach((coord, i) => {{
+                                    const lat = coord[0];
+                                    const lon = coord[1];
+                                    const alt = coord[2].toFixed(1);
+                                    const marker = L.circleMarker([lat, lon], {{
+                                        radius: 0,
+                                        fillOpacity: 0,
+                                        stroke: false
+                                    }}).on('mouseover', function(e) {{
+                                        const popup = L.popup()
+                                            .setLatLng([lat, lon])
+                                            .setContent(
+                                                '<div style="font-family: monospace; font-size: 13px;">' +
+                                                '<strong>Точка ' + (i + 1) + ' из ' + coords.length + '</strong><br>' +
+                                                'Широта: ' + lat.toFixed(6) + '°<br>' +
+                                                'Долгота: ' + lon.toFixed(6) + '°<br>' +
+                                                'Высота: ' + alt + ' м' +
+                                                '</div>'
+                                            )
+                                            .openOn(map);
+                                    }}).on('mouseout', function() {{
+                                        map.closePopup();
+                                    }});
+                                    markerGroup.addLayer(marker);
+                                }});
                                 
-                                // Добавляем маркеры взлета и посадки
+                                // Добавляем маркеры взлета и посадки с координатами
                                 if (points.length > 0) {{
-                                    L.marker(points[0], {{
-                                        icon: L.divIcon({{
-                                            html: '🚀',
-                                            className: 'flight-marker',
-                                            iconSize: [30, 30]
-                                        }})
-                                    }}).addTo(map).bindPopup('Взлет');
+                                    // Взлет - точка 1
+                                    const takeoffLat = points[0][0];
+                                    const takeoffLon = points[0][1];
+                                    const takeoffAlt = coords[0][2].toFixed(1);
                                     
-                                    L.marker(points[points.length-1], {{
+                                    const takeoffMarker = L.marker(points[0], {{
                                         icon: L.divIcon({{
-                                            html: '🛬',
+                                            html: '🚀<div style="font-size: 9px; margin-top: -5px; color: #2ecc71;">Взлет</div>',
                                             className: 'flight-marker',
-                                            iconSize: [30, 30]
+                                            iconSize: [35, 40],
+                                            iconAnchor: [17, 40]
                                         }})
-                                    }}).addTo(map).bindPopup('Посадка');
+                                    }}).addTo(map);
+                                    
+                                    takeoffMarker.bindPopup(
+                                        '<div style="font-family: monospace; font-size: 14px; max-width: 250px;">' +
+                                        '<strong style="color: #2ecc71;">🚀 Точка взлета</strong><br>' +
+                                        'Широта: ' + takeoffLat.toFixed(6) + '°<br>' +
+                                        'Долгота: ' + takeoffLon.toFixed(6) + '°<br>' +
+                                        'Высота: ' + takeoffAlt + ' м<br>' +
+                                        '<hr style="margin: 8px 0;">' +
+                                        '<em>Точка 1 из ' + coords.length + '</em>' +
+                                        '</div>'
+                                    );
+                                    
+                                    // Посадка - последняя точка
+                                    const landingLat = points[points.length-1][0];
+                                    const landingLon = points[points.length-1][1];
+                                    const landingAlt = coords[coords.length-1][2].toFixed(1);
+                                    
+                                    const landingMarker = L.marker(points[points.length-1], {{
+                                        icon: L.divIcon({{
+                                            html: '🛬<div style="font-size: 9px; margin-top: -5px; color: #e74c3c;">Посадка</div>',
+                                            className: 'flight-marker',
+                                            iconSize: [35, 40],
+                                            iconAnchor: [17, 40]
+                                        }})
+                                    }}).addTo(map);
+                                    
+                                    landingMarker.bindPopup(
+                                        '<div style="font-family: monospace; font-size: 14px; max-width: 250px;">' +
+                                        '<strong style="color: #e74c3c;">🛬 Точка посадки</strong><br>' +
+                                        'Широта: ' + landingLat.toFixed(6) + '°<br>' +
+                                        'Долгота: ' + landingLon.toFixed(6) + '°<br>' +
+                                        'Высота: ' + landingAlt + ' м<br>' +
+                                        '<hr style="margin: 8px 0;">' +
+                                        '<em>Точка ' + coords.length + ' из ' + coords.length + '</em>' +
+                                        '</div>'
+                                    );
                                     
                                     // Масштабируем чтобы вся траектория была видна
                                     map.fitBounds(track.getBounds());
@@ -1410,13 +1486,48 @@ coords.forEach((coord, i) => {{
                                         const div = L.DomUtil.create('div', 'map-info');
                                         div.innerHTML = 
                                             '<div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 12px;">' +
-                                            '<strong>Маршрут</strong><br>' +
-                                            'Точки: ' + coords.length + '<br>' +
-                                            'Длина: ~' + calculateDistance(points).toFixed(2) + ' км' +
+                                            '<strong>Маршрут полета</strong><br>' +
+                                            'Точек: ' + coords.length + '<br>' +
+                                            'Длина: ~' + calculateDistance(points).toFixed(2) + ' км<br>' +
+                                            '<hr style="margin: 5px 0;">' +
+                                            '<strong>Слои карты:</strong><br>' +
+                                            '• Спутник - до 20x zoom<br>' +
+                                            '• Карта - до 19x zoom' +
                                             '</div>';
                                         return div;
                                     }};
                                     info.addTo(map);
+                                    
+                                    // Добавляем кнопку для сброса вида
+                                    const resetControl = L.control({{position: 'topleft'}});
+                                    resetControl.onAdd = function() {{
+                                        const div = L.DomUtil.create('div', 'reset-control');
+                                        div.innerHTML = 
+                                            '<button style="background: white; border: 2px solid #3498db; color: #3498db; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;">' +
+                                            'Вид по умолчанию' +
+                                            '</button>';
+                                        div.onclick = function() {{
+                                            map.fitBounds(track.getBounds());
+                                        }};
+                                        return div;
+                                    }};
+                                    resetControl.addTo(map);
+                                    
+                                    // Добавляем легенду для маркеров
+                                    const legendControl = L.control({{position: 'bottomleft'}});
+                                    legendControl.onAdd = function() {{
+                                        const div = L.DomUtil.create('div', 'map-legend');
+                                        div.innerHTML = 
+                                            '<div style="background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); font-size: 11px;">' +
+                                            '<strong>Обозначения:</strong><br>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px;">🚀</span><div style="margin-left: 5px;">Взлет</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><span style="font-size: 16px;">🛬</span><div style="margin-left: 5px;">Посадка</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><div style="width: 15px; height: 3px; background: #3498db; margin-right: 5px;"></div><div>Траектория</div></div>' +
+                                            '<div style="display: flex; align-items: center; margin: 3px 0;"><div style="width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 1px dashed #ccc; margin-right: 5px;"></div><div>Наведите для координат</div></div>' +
+                                            '</div>';
+                                        return div;
+                                    }};
+                                    legendControl.addTo(map);
                                 }}
                             }}
                         }})
@@ -1424,7 +1535,7 @@ coords.forEach((coord, i) => {{
                             console.error('Ошибка загрузки GPS данных:', error);
                             document.getElementById('map').innerHTML = 
                                 '<div style="display: flex; justify-content: center; align-items: center; height: 100%; color: #e74c3c;">' +
-                                'Ошибка загрузки GPS данных' +
+                                'Ошибка загрузки GPS данных: ' + error.message +
                                 '</div>';
                         }});
                     
